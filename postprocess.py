@@ -27,6 +27,45 @@ DIGIT_CONFUSION = {
 }
 
 
+def _numeric_runs_preserving_decimals(orig, corrected):
+    """
+    Extracts digit runs from `corrected` (already DIGIT_CONFUSION-mapped),
+    chaining two runs across a single '.' or ',' separator into ONE
+    continuous number ONLY when the characters immediately either side
+    of that separator were ALREADY digits in the ORIGINAL, unmapped
+    text -- not merely digit-shaped after confusion-mapping a letter.
+
+    This is what actually distinguishes a genuine decimal like "2.630"
+    (both neighbors of the '.' were real digits already) from a
+    truncated OCR read like "NO.517443900104" (the 'O' in "NO" maps to
+    '0' via DIGIT_CONFUSION, but it was a LETTER, not a digit -- so the
+    '.' there is an abbreviation period, not a decimal point). Chaining
+    blindly on the confusion-mapped string alone can't tell these
+    apart, and was confirmed gluing a converted stray letter onto an
+    unrelated following number on a real extracted "REFERENCE DRG NO."
+    cell. `orig` and `corrected` are always the same length and
+    index-aligned, since DIGIT_CONFUSION only ever maps one character
+    to exactly one character.
+    """
+    runs = []
+    i, n = 0, len(corrected)
+    while i < n:
+        if not corrected[i].isdigit():
+            i += 1
+            continue
+        start = i
+        while i < n and corrected[i].isdigit():
+            i += 1
+        while (i < n and corrected[i] in '.,' and i + 1 < n
+               and corrected[i + 1].isdigit()
+               and orig[i - 1].isdigit() and orig[i + 1].isdigit()):
+            i += 1  # consume the separator
+            while i < n and corrected[i].isdigit():
+                i += 1
+        runs.append(corrected[start:i])
+    return runs
+
+
 def _normalize_if_numeric(text, min_digit_fraction=0.5):
     """
     Generic structural cleanup: if a cell is already mostly digits
@@ -56,14 +95,15 @@ def _normalize_if_numeric(text, min_digit_fraction=0.5):
     # thousands-separated value like "2.630" gets shattered into ['2',
     # '630'] and the longer-but-wrong fragment wins, silently dropping
     # the "2." -- confirmed as a real failure on an actual extracted
-    # length value. Matching digit groups CHAINED by a single separator
-    # keeps a genuine decimal/thousands number intact as one token,
-    # while still falling back to plain digit runs when there's no
-    # separator at all. This is still purely structural (no locale
-    # assumption about which separator means what) -- it only ever
-    # preserves whatever punctuation OCR already read between two digit
-    # groups, never invents or reinterprets it.
-    runs = re.findall(r'\d+(?:[.,]\d+)*', corrected)
+    # length value. Chaining digit groups across a single separator
+    # keeps a genuine decimal/thousands number intact as one token --
+    # but only when that separator's neighbors were ALREADY digits
+    # before confusion-mapping (see _numeric_runs_preserving_decimals),
+    # so a truncated label fragment like "NO.517443900104" (a
+    # confusion-mapped 'O' next to an abbreviation period) doesn't get
+    # glued into a fake "0.517443900104" the same way -- confirmed as a
+    # real failure on an actual extracted REFERENCE DRG NO. value.
+    runs = _numeric_runs_preserving_decimals(text, corrected)
     if not runs:
         return text
     return max(runs, key=len)

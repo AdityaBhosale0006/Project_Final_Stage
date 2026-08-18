@@ -71,8 +71,9 @@ except ImportError:
 
 # ---------- Stage 1-4: extraction pipeline ----------
 
-def run_extraction(img_path, out_xlsx, col_names=None, engine="paddle",
-                    header_position="bottom", use_vocab=True):
+def run_extraction(img_path, out_xlsx=None, col_names=None, engine="paddle",
+                    header_position="bottom", use_vocab=True,
+                    workbook=None, sheet_name=None):
     """
     header_position: "bottom" (default) or "top". These BOM sheets build
     the table upward from a title block at the bottom of the page, so
@@ -89,6 +90,15 @@ def run_extraction(img_path, out_xlsx, col_names=None, engine="paddle",
     header-row detection falls back to the vocabulary-free
     row-similarity signal / header_position instead. Banner-row
     skipping (see header.py) is pure geometry and applies either way.
+
+    workbook / sheet_name: passed straight through to export_xlsx.export
+    -- give an existing openpyxl Workbook here to add this table into it
+    as a named sheet instead of always creating a standalone one-sheet
+    file (see export()'s own docstring for the full behavior). This is
+    what lets a caller (e.g. extract_page.py) run this exact, unchanged
+    extraction pipeline per table while still assembling several tables
+    into one shared, per-page workbook with sheets named from
+    classification -- out_xlsx becomes optional in that case.
     """
     img = cv2.imread(img_path)
     if img is None:
@@ -144,10 +154,14 @@ def run_extraction(img_path, out_xlsx, col_names=None, engine="paddle",
             cell.ocr_text = correct_cell(col_names[c], cell.ocr_text)
     print("[3/5] Domain-aware corrections applied.")
 
-    export(struct, out_xlsx, col_names, row_order=data_row_order)
-    print(f"[4/5] Excel saved: {out_xlsx}")
+    result = export(struct, out_xlsx, col_names, row_order=data_row_order,
+                     workbook=workbook, sheet_name=sheet_name)
+    if workbook is not None:
+        print(f"[4/5] Added sheet '{result.sheetnames[-1]}' to shared workbook.")
+    else:
+        print(f"[4/5] Excel saved: {out_xlsx}")
 
-    return struct, gray
+    return struct, gray, result
 
 
 # ---------- Stage 5: crop export ----------
@@ -212,8 +226,8 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     xlsx_path = os.path.join(out_dir, "extracted.xlsx")
-    struct, gray = run_extraction(img_path, xlsx_path, engine=engine,
-                                   header_position=header_position, use_vocab=use_vocab)
+    struct, gray, _ = run_extraction(img_path, xlsx_path, engine=engine,
+                                      header_position=header_position, use_vocab=use_vocab)
 
     images_dir = os.path.join(out_dir, "crops")
     manifest_path = os.path.join(out_dir, "manifest.csv")
