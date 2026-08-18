@@ -1,0 +1,13 @@
+opencv-python-headless>=4.9
+numpy>=1.26,<2.0
+openpyxl>=3.1
+
+# OCR engine (default): PaddleOCR + its CPU inference backend.
+# paddlepaddle is the actual tensor/inference runtime PaddleOCR runs on --
+# it is a separate package from paddleocr itself and must be installed too.
+paddlepaddle>=2.6
+paddleocr>=3.0
+
+# OCR engine (optional fallback): Tesseract via pytesseract.
+# Also requires the tesseract-ocr system binary (see README "Setup").
+pytesseract>=0.3.10
