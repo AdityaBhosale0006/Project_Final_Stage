@@ -1009,7 +1009,7 @@ def _trim_whitespace_margins(crop_bgr, safety_px=2,
 # Orchestration
 # ---------------------------------------------------------------------------
 
-def detect_and_render(pdf_path, output_dir, dpi=600, preview_dpi=300,
+def detect_and_render(pdf_path, output_dir, dpi=300, preview_dpi=150,
                        min_lines=3, padding_pt=6.0):
     os.makedirs(output_dir, exist_ok=True)
     tables_dir = os.path.join(output_dir, "tables")

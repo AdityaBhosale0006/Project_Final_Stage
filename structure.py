@@ -67,8 +67,35 @@ class TableStructure:
         self.col_frac_thresh = col_frac_thresh
         self.header_position = header_position
 
+        # Pixel tolerances below (cluster_1d's line-coordinate grouping gap,
+        # and the +/-N px window _line_exists_at/_vline_exists_at search
+        # around an expected wall position) were originally hardcoded
+        # constants tuned against ~300 DPI crops (2243px-wide reference
+        # table). At a meaningfully higher render DPI, every gridline is
+        # proportionally more pixels wide/further apart, so a fixed pixel
+        # tolerance becomes too tight -- real walls fall outside the search
+        # window, read as "missing", and get unioned into false merges.
+        # Scaling both by the image's own width relative to that reference
+        # keeps wall/grid-line detection resolution-independent instead of
+        # silently degrading whenever dpi changes.
+        _REFERENCE_W = 2243
+        self._px_scale = self.w / _REFERENCE_W
+        self._cluster_gap = max(5, round(5 * self._px_scale))
+        self._boundary_tol = max(2, round(2 * self._px_scale))
+        # Adaptive-threshold binarization also uses a fixed local
+        # neighborhood (blockSize) to decide dark-vs-light per pixel. At
+        # higher DPI, gridlines/strokes are proportionally thicker, so a
+        # too-small fixed blockSize can end up sampling only a line's own
+        # interior, making it locally indistinguishable from background --
+        # lines drop out or turn spotty, and wall detection misreads them
+        # as missing, causing false merges. Scale it the same way; must
+        # stay odd and >=3 for cv2.adaptiveThreshold.
+        block_size = max(3, round(15 * self._px_scale))
+        if block_size % 2 == 0:
+            block_size += 1
+
         self.bin_img = cv2.adaptiveThreshold(
-            ~gray_img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2
+            ~gray_img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, block_size, -2
         )
         self._detect_horizontal_lines()
         self.Y = self._detect_rows()
@@ -92,7 +119,7 @@ class TableStructure:
     def _detect_rows(self):
         row_sums = np.sum(self.horiz_lines, axis=1)
         y_rows = np.where(row_sums > (self.w * self.row_frac_thresh * 255))[0]
-        Y = cluster_1d(list(y_rows))
+        Y = cluster_1d(list(y_rows), gap=self._cluster_gap)
         if len(Y) < 2:
             raise ValueError("Could not detect enough row lines to form a table.")
         return Y
@@ -132,7 +159,7 @@ class TableStructure:
             vlines = cv2.dilate(cv2.erode(band, vkernel), vkernel)
             col_sums = np.sum(vlines, axis=0)
             xs = np.where(col_sums > ((y1 - y0) * self.col_frac_thresh * 255))[0]
-            X = cluster_1d(list(xs), gap=5)
+            X = cluster_1d(list(xs), gap=self._cluster_gap)
             candidates.append(X)
 
         def regularity_score(X):
@@ -160,7 +187,8 @@ class TableStructure:
         """Is there a real horizontal rule at row-boundary y_idx, spanning column col_i?"""
         y = self.Y[y_idx]
         x0, x1 = self.X[col_i], self.X[col_i + 1]
-        band = self.horiz_lines[max(0, y - 2):y + 3, x0:x1]
+        t = self._boundary_tol
+        band = self.horiz_lines[max(0, y - t):y + t + 1, x0:x1]
         if band.size == 0:
             return False
         return (band.max(axis=0) > 0).mean() > self.line_presence_thresh
@@ -169,7 +197,8 @@ class TableStructure:
         """Is there a real vertical rule at column-boundary x_idx, spanning row_i?"""
         x = self.X[x_idx]
         y0, y1 = self.Y[row_i], self.Y[row_i + 1]
-        band = self.vert_lines[y0:y1, max(0, x - 2):x + 3]
+        t = self._boundary_tol
+        band = self.vert_lines[y0:y1, max(0, x - t):x + t + 1]
         if band.size == 0:
             return False
         return (band.max(axis=1) > 0).mean() > self.line_presence_thresh

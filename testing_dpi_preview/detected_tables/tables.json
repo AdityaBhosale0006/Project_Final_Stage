@@ -1,0 +1,101 @@
+[
+  {
+    "page": 0,
+    "table_index": 0,
+    "method": "raster_fallback",
+    "content_type": "uncertain",
+    "content_signals": {
+      "n_curves": 0,
+      "n_embedded_images": 1,
+      "avg_row_height_pt": 13.8,
+      "avg_col_width_pt": 107.6
+    },
+    "detected_grid": {
+      "n_h_lines": 52,
+      "n_v_lines": 6
+    },
+    "bbox_pdf_points": [
+      97.2,
+      77.1,
+      635.1,
+      783.0
+    ],
+    "render_dpi": 500,
+    "perspective_warped": false,
+    "crop_filename": "tables/page0_table0_extract-true_schema_Pipe_BOM.png",
+    "crop_size_px": [
+      3735,
+      4902
+    ],
+    "extraction": true,
+    "header_position": "bottom",
+    "match_kind": "schema",
+    "sheet_name": "Pipe BOM"
+  },
+  {
+    "page": 0,
+    "table_index": 1,
+    "method": "raster_fallback",
+    "content_type": "uncertain",
+    "content_signals": {
+      "n_curves": 0,
+      "n_embedded_images": 1,
+      "avg_row_height_pt": 17.9,
+      "avg_col_width_pt": 80.7
+    },
+    "detected_grid": {
+      "n_h_lines": 6,
+      "n_v_lines": 6
+    },
+    "bbox_pdf_points": [
+      747.1,
+      155.8,
+      1150.5,
+      245.5
+    ],
+    "render_dpi": 500,
+    "perspective_warped": false,
+    "crop_filename": "tables/page0_table1_extract-true_banner_5216.png",
+    "crop_size_px": [
+      2801,
+      623
+    ],
+    "extraction": true,
+    "header_position": "top",
+    "match_kind": "banner",
+    "sheet_name": "5216"
+  },
+  {
+    "page": 0,
+    "table_index": 2,
+    "method": "raster_fallback",
+    "content_type": "uncertain",
+    "content_signals": {
+      "n_curves": 0,
+      "n_embedded_images": 1,
+      "avg_row_height_pt": 16.0,
+      "avg_col_width_pt": 64.8
+    },
+    "detected_grid": {
+      "n_h_lines": 5,
+      "n_v_lines": 6
+    },
+    "bbox_pdf_points": [
+      786.0,
+      596.0,
+      1110.2,
+      660.0
+    ],
+    "render_dpi": 500,
+    "perspective_warped": false,
+    "crop_filename": "tables/page0_table2_extract-true_banner_52164.png",
+    "crop_size_px": [
+      2251,
+      444
+    ],
+    "extraction": true,
+    "header_position": "top",
+    "match_kind": "banner",
+    "sheet_name": "52164"
+  }
+]

@@ -51,6 +51,7 @@ produces no xlsx at all.
 Usage:
     python3 extract_page.py <pdf_path> [output_dir]
         [--engine=paddle|tesseract] [--vocab=on|off]
+        [--dpi=300] [--preview-dpi=150]
 """
 import sys
 import os
@@ -204,8 +205,21 @@ def _classify_and_prepare(entry, detect_dir, engine):
         return None
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    struct = TableStructure(gray, header_position="top")  # arbitrary; see classify_table
-    accepted, header_position, sheet_name, match_kind = classify_table(gray, struct, engine)
+    try:
+        struct = TableStructure(gray, header_position="top")  # arbitrary; see classify_table
+        accepted, header_position, sheet_name, match_kind = classify_table(gray, struct, engine)
+    except Exception as e:
+        # a crop that isn't cleanly gridded enough for structure.py to
+        # even read its top/bottom row (e.g. ValueError: "Could not
+        # detect column boundaries...") must be treated as a rejected
+        # table, not a fatal error -- one ungridded false-positive
+        # detection from Stage 0 must not abort the rest of the page/run
+        entry["extraction"] = "error"
+        entry["error"] = f"{type(e).__name__}: {e}"
+        print(f"  {label}: extraction=error (classification failed: {type(e).__name__}: {e})")
+        if os.path.exists(old_crop_path):
+            os.remove(old_crop_path)
+        return None
 
     entry["extraction"] = accepted
     entry["header_position"] = header_position
@@ -228,12 +242,13 @@ def _classify_and_prepare(entry, detect_dir, engine):
     return new_crop_path
 
 
-def extract_pdf(pdf_path, output_dir, engine="paddle", use_vocab=True):
+def extract_pdf(pdf_path, output_dir, engine="paddle", use_vocab=True, dpi=300, preview_dpi=150):
     os.makedirs(output_dir, exist_ok=True)
     detect_dir = os.path.join(output_dir, "detected_tables")
 
-    print(f"[Stage 0] Detecting tables across all pages of {pdf_path} ...")
-    manifest = detect_and_render(pdf_path, detect_dir)
+    print(f"[Stage 0] Detecting tables across all pages of {pdf_path} "
+          f"(dpi={dpi}, preview_dpi={preview_dpi}) ...")
+    manifest = detect_and_render(pdf_path, detect_dir, dpi=dpi, preview_dpi=preview_dpi)
 
     # group by page so each page can be fully classified, extracted,
     # AND saved before moving on -- a crash partway through a large
@@ -257,6 +272,8 @@ def extract_pdf(pdf_path, output_dir, engine="paddle", use_vocab=True):
         for entry in page_entries:
             new_crop_path = _classify_and_prepare(entry, detect_dir, engine)
             if new_crop_path is None:
+                if entry.get("extraction") == "error":
+                    total_errors += 1  # classification itself raised -- count it too
                 continue  # rejected, or unreadable -- already logged
 
             label = f"page{entry['page']}_table{entry['table_index']}"
@@ -346,13 +363,15 @@ def main():
         print(__doc__)
         sys.exit(1)
 
-    flags = {"--engine", "--vocab", "--precropped"}
+    flags = {"--engine", "--vocab", "--precropped", "--dpi", "--preview-dpi"}
     args = [a for a in sys.argv[1:] if not any(a.startswith(f) for f in flags)]
     flag_args = [a for a in sys.argv[1:] if any(a.startswith(f) for f in flags)]
     opts = dict(a.split("=", 1) for a in flag_args)
     engine = opts.get("--engine", "paddle")
     use_vocab = opts.get("--vocab", "on") != "off"
     precropped = opts.get("--precropped", "false") == "true"
+    dpi = int(opts.get("--dpi", 300))
+    preview_dpi = int(opts.get("--preview-dpi", 150))
 
     input_path = args[0]
     output_dir = args[1] if len(args) > 1 else "extract_pdf_output"
@@ -360,7 +379,8 @@ def main():
     if precropped:
         extract_single_table(input_path, output_dir, engine=engine, use_vocab=use_vocab)
     else:
-        extract_pdf(input_path, output_dir, engine=engine, use_vocab=use_vocab)
+        extract_pdf(input_path, output_dir, engine=engine, use_vocab=use_vocab,
+                    dpi=dpi, preview_dpi=preview_dpi)
 
 
 if __name__ == "__main__":
